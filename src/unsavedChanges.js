@@ -14,6 +14,7 @@ angular.module('unsavedChanges', ['resettable'])
     var routeEvent = ['$locationChangeStart', '$stateChangeStart'];
     var navigateMessage = 'You will lose unsaved changes if you leave this page';
     var reloadMessage = 'You will lose unsaved changes if you reload this page';
+    var onNavigate;
 
     Object.defineProperty(_this, 'navigateMessage', {
         get: function() {
@@ -60,69 +61,87 @@ angular.module('unsavedChanges', ['resettable'])
         }
     });
 
+    Object.defineProperty(_this, 'onNavigate', {
+        get: function() {
+            return onNavigate;
+        },
+        set: function(value) {
+            onNavigate = value;
+        }
+    });
+
     this.$get = ['$injector',
-        function($injector) {
+    function($injector) {
 
-            function translateIfAble(message) {
-                if ($injector.has('$translate') && useTranslateService) {
-                    return $injector.get('$translate').instant(message);
-                } else {
-                    return false;
-                }
+        function translateIfAble(message) {
+            if ($injector.has('$translate') && useTranslateService) {
+                return $injector.get('$translate').instant(message);
+            } else {
+                return false;
             }
+        }
 
-            var publicInterface = {
-                // log function that accepts any number of arguments
-                // @see http://stackoverflow.com/a/7942355/1738217
-                log: function() {
-                    if (console.log && logEnabled && arguments.length) {
-                        var newarr = [].slice.call(arguments);
-                        if (typeof console.log === 'object') {
-                            log.apply.call(console.log, console, newarr);
-                        } else {
-                            console.log.apply(console, newarr);
-                        }
+        var publicInterface = {
+            // log function that accepts any number of arguments
+            // @see http://stackoverflow.com/a/7942355/1738217
+            log: function() {
+                if (console.log && logEnabled && arguments.length) {
+                    var newarr = [].slice.call(arguments);
+                    if (typeof console.log === 'object') {
+                        log.apply.call(console.log, console, newarr);
+                    } else {
+                        console.log.apply(console, newarr);
                     }
                 }
-            };
+            }
+        };
 
-            Object.defineProperty(publicInterface, 'useTranslateService', {
-                get: function() {
-                    return useTranslateService;
-                }
-            });
+        Object.defineProperty(publicInterface, 'useTranslateService', {
+            get: function() {
+                return useTranslateService;
+            }
+        });
 
-            Object.defineProperty(publicInterface, 'reloadMessage', {
-                get: function() {
-                    return translateIfAble(reloadMessage) || reloadMessage;
-                }
-            });
+        Object.defineProperty(publicInterface, 'reloadMessage', {
+            get: function() {
+                return translateIfAble(reloadMessage) || reloadMessage;
+            }
+        });
 
-            Object.defineProperty(publicInterface, 'navigateMessage', {
-                get: function() {
-                    return translateIfAble(navigateMessage) || navigateMessage;
-                }
-            });
+        Object.defineProperty(publicInterface, 'navigateMessage', {
+            get: function() {
+                return translateIfAble(navigateMessage) || navigateMessage;
+            }
+        });
 
-            Object.defineProperty(publicInterface, 'routeEvent', {
-                get: function() {
-                    return routeEvent;
-                }
-            });
+        Object.defineProperty(publicInterface, 'routeEvent', {
+            get: function() {
+                return routeEvent;
+            }
+        });
 
-            Object.defineProperty(publicInterface, 'logEnabled', {
-                get: function() {
-                    return logEnabled;
-                }
-            });
+        Object.defineProperty(publicInterface, 'logEnabled', {
+            get: function() {
+                return logEnabled;
+            }
+        });
 
-            return publicInterface;
-        }
-    ];
+        Object.defineProperty(publicInterface, 'onNavigate', {
+            get: function() {
+                return onNavigate;
+            },
+            set: function(inOnNavigate) {
+                onNavigate = inOnNavigate;
+            }
+        });
+
+        return publicInterface;
+    }
+];
 })
 
-.service('unsavedWarningSharedService', ['$rootScope', 'unsavedWarningsConfig', '$injector', '$window',
-    function($rootScope, unsavedWarningsConfig, $injector, $window) {
+.service('unsavedWarningSharedService', ['$rootScope', 'unsavedWarningsConfig', '$injector', '$window', '$state',
+    function($rootScope, unsavedWarningsConfig, $injector, $window, $state) {
 
         // Controller scopped variables
         var _this = this;
@@ -195,20 +214,41 @@ angular.module('unsavedChanges', ['resettable'])
             $window.onbeforeunload = _this.confirmExit;
 
             var eventsToWatchFor = unsavedWarningsConfig.routeEvent;
+            var intentionConfirmed = false;
 
             angular.forEach(eventsToWatchFor, function(aEvent) {
                 //calling this function later will unbind this, acting as $off()
-                var removeFn = $rootScope.$on(aEvent, function(event, next, current) {
+                var removeFn = $rootScope.$on(aEvent, function(event, next, nextparams) {
                     unsavedWarningsConfig.log("user is moving with " + aEvent);
                     // @todo this could be written a lot cleaner!
                     if (!allFormsClean()) {
                         unsavedWarningsConfig.log("a form is dirty");
-                        if (!confirm(unsavedWarningsConfig.navigateMessage)) {
-                            unsavedWarningsConfig.log("user wants to cancel leaving");
-                            event.preventDefault(); // user clicks cancel, wants to stay on page
-                        } else {
-                            unsavedWarningsConfig.log("user doesn't care about loosing stuff");
-                            $rootScope.$broadcast('resetResettables');
+                        if(unsavedWarningsConfig.onNavigate){
+                            if(!intentionConfirmed){
+                                event.preventDefault();
+                                unsavedWarningsConfig.onNavigate().then(
+                                    function() {
+                                        $rootScope.$broadcast('resetResettables');
+                                        nextparams = nextparams || {};
+                                        intentionConfirmed = true;
+                                        $state.go(next.name, nextparams);
+                                        unsavedWarningsConfig.log("user wants to cancel leaving");
+                                    },
+                                    function() {
+                                        unsavedWarningsConfig.log("user doesn't care about loosing stuff");
+                                    }
+                                );
+                            }else{
+                                intentionConfirmed = true;
+                            }
+                        }else {
+                            if(!confirm(unsavedWarningsConfig.navigateMessage)) {
+                                unsavedWarningsConfig.log("user wants to cancel leaving");
+                                event.preventDefault(); // user clicks cancel, wants to stay on page
+                            } else {
+                                unsavedWarningsConfig.log("user doesn't care about loosing stuff");
+                                $rootScope.$broadcast('resetResettables');
+                            }
                         }
                     } else {
                         unsavedWarningsConfig.log("all forms are clean");

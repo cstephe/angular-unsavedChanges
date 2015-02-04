@@ -3,7 +3,7 @@
 /*jshint undef:false */
 
 angular.module('unsavedChanges', ['resettable'])
-
+.constant('_')
 .provider('unsavedWarningsConfig', function() {
 
     var _this = this;
@@ -276,9 +276,8 @@ angular.module('unsavedChanges', ['resettable'])
         };
     }
 ])
-
-.directive('unsavedWarningForm', ['unsavedWarningSharedService', '$rootScope',
-    function(unsavedWarningSharedService, $rootScope) {
+.directive('unsavedWarningForm', ['unsavedWarningSharedService', '$rootScope', '_',
+    function(unsavedWarningSharedService, $rootScope, _) {
         return {
             scope: {},
             require: '^form',
@@ -290,7 +289,7 @@ angular.module('unsavedChanges', ['resettable'])
                 // traverse up parent elements to find the form.
                 // we need a form element since we bind to form events: submit, reset
                 var count = 0;
-                while(formElement[0].tagName !== 'FORM' && count < 3) {
+                while(count < 3 && formElement[0].tagName !== 'FORM' && !_.findWhere(_.values(formElement[0].attributes), {name:'ng-form'})) {
                     count++;
                     formElement = formElement.parent();
                 }

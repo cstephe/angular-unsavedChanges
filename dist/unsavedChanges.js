@@ -226,7 +226,7 @@ angular.module('unsavedChanges', ['resettable'])
                         if(unsavedWarningsConfig.onNavigate){
                             if(!intentionConfirmed){
                                 event.preventDefault();
-                                unsavedWarningsConfig.onNavigate().then(
+                                unsavedWarningsConfig.onNavigate(event, next, nextparams).then(
                                     function() {
                                         $rootScope.$broadcast('resetResettables');
                                         nextparams = nextparams || {};

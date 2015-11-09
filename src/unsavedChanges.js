@@ -3,7 +3,7 @@
 /*jshint undef:false */
 
 angular.module('unsavedChanges', ['resettable'])
-.constant('_')
+.constant('_', _)
 .provider('unsavedWarningsConfig', function() {
 
     var _this = this;
